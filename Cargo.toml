@@ -11,4 +11,4 @@ cargo_toml = "0.11.5"
 git2 = "0.14.2"
 toml = "0.5.8"
 reqwest = { version = "0.11.10", features = ["default", "blocking" ] }
-omicron-package = { path = "../omicron/package" }
+omicron-package = { git = "https://github.com/oxidecomputer/omicron", branch = "main" }

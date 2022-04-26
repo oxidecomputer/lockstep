@@ -82,6 +82,7 @@ checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 [[package]]
 name = "api_identity"
 version = "0.1.0"
+source = "git+https://github.com/oxidecomputer/omicron?branch=main#db6bc39dac09a1c31464bd7874a075ddfbfee4e0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1541,6 +1542,7 @@ dependencies = [
 [[package]]
 name = "nexus-client"
 version = "0.1.0"
+source = "git+https://github.com/oxidecomputer/omicron?branch=main#db6bc39dac09a1c31464bd7874a075ddfbfee4e0"
 dependencies = [
  "chrono",
  "omicron-common",
@@ -1608,6 +1610,7 @@ checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 [[package]]
 name = "omicron-common"
 version = "0.1.0"
+source = "git+https://github.com/oxidecomputer/omicron?branch=main#db6bc39dac09a1c31464bd7874a075ddfbfee4e0"
 dependencies = [
  "anyhow",
  "api_identity",
@@ -1642,6 +1645,7 @@ dependencies = [
 [[package]]
 name = "omicron-package"
 version = "0.1.0"
+source = "git+https://github.com/oxidecomputer/omicron?branch=main#db6bc39dac09a1c31464bd7874a075ddfbfee4e0"
 dependencies = [
  "anyhow",
  "futures",
@@ -1668,6 +1672,7 @@ dependencies = [
 [[package]]
 name = "omicron-sled-agent"
 version = "0.1.0"
+source = "git+https://github.com/oxidecomputer/omicron?branch=main#db6bc39dac09a1c31464bd7874a075ddfbfee4e0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1960,9 +1965,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.8"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e280fbe77cc62c91527259e9442153f4688736748d24660126286329742b4c6c"
+checksum = "e0a7ae3ac2f1173085d398531c705756c94a4c56843785df85a60c1a0afac116"
 
 [[package]]
 name = "pin-utils"
@@ -2693,6 +2698,7 @@ checksum = "eb703cfe953bccee95685111adeedb76fabe4e97549a58d16f03ea7b9367bb32"
 [[package]]
 name = "sled-agent-client"
 version = "0.1.0"
+source = "git+https://github.com/oxidecomputer/omicron?branch=main#db6bc39dac09a1c31464bd7874a075ddfbfee4e0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3085,9 +3091,9 @@ checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
 
 [[package]]
 name = "tinyvec"
-version = "1.5.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c1c1d5a42b6245520c249549ec267180beaffcc0615401ac8e31853d4b6d8d2"
+checksum = "87cc5ceb3875bb20c2890005a4e226a4651264a5c75edb2421b52861a0a0cb50"
 dependencies = [
  "tinyvec_macros",
 ]
@@ -3333,9 +3339,9 @@ checksum = "56dee185309b50d1f11bfedef0fe6d036842e3fb77413abef29f8f8d1c5d4c1c"
 
 [[package]]
 name = "unicode-bidi"
-version = "0.3.7"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a01404663e3db436ed2746d9fefef640d868edae3cceb81c3b8d5732fda678f"
+checksum = "099b7128301d285f79ddd55b9a83d5e6b9e97c92e0ea0daebee7263e932de992"
 
 [[package]]
 name = "unicode-normalization"
