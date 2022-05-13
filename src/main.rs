@@ -95,7 +95,7 @@ fn main() -> Result<()> {
     // Check we're in a location that contains checkouts of relevant repos
     for repo in &["crucible", "propolis", "omicron"] {
         if !Path::new(&repo).exists() {
-            bail!("{} does not exist!", repo);
+            bail!("cannot find your local checkout of {}!", repo);
         }
     }
 
