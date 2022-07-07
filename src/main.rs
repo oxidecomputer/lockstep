@@ -93,7 +93,7 @@ fn main() -> Result<()> {
     let mut update_required = false;
 
     // Check we're in a location that contains checkouts of relevant repos
-    for repo in &["crucible", "propolis", "omicron"] {
+    for repo in &["crucible", "propolis", "omicron", "maghemite"] {
         if !Path::new(&repo).exists() {
             bail!("cannot find your local checkout of {}!", repo);
         }
@@ -112,6 +112,11 @@ fn main() -> Result<()> {
     let propolis_rev: git2::Oid = propolis_repo.head()?.target().unwrap();
 
     latest_revs.insert("propolis".to_string(), propolis_rev.to_string());
+
+    let maghemite_repo = git2::Repository::open("maghemite")?;
+    let maghemite_rev: git2::Oid = maghemite_repo.head()?.target().unwrap();
+
+    latest_revs.insert("maghemite".to_string(), maghemite_rev.to_string());
 
     // Ensure propolis uses this crucible revision
     update_required |= compare_cargo_toml_revisions(
@@ -158,6 +163,15 @@ fn main() -> Result<()> {
             sha256,
         } = &package.source
         {
+            if !latest_revs.contains_key(&repo.clone()) {
+                panic!("no latest rev for {}", repo);
+            }
+
+            // skip checking maghemite for now
+            if repo == &"maghemite".to_string() {
+                continue;
+            }
+
             // make sure images are built
             let response = client
                     .get(&format!("
