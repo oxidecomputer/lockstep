@@ -35,8 +35,9 @@ opte support is missing
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use cargo_toml::Manifest;
+use glob::glob;
 use reqwest::blocking::Client;
 
 use omicron_package::{Config, ExternalPackageSource};
@@ -54,28 +55,38 @@ fn compare_cargo_toml_revisions(
 
     if let Some(workspace) = &cargo_manifest.workspace {
         for member in &workspace.members {
-            let sub_cargo_path = format!("./{}/{}/Cargo.toml", sub_directory, member);
-            let sub_cargo_manifest = Manifest::from_path(&sub_cargo_path)?;
+            // use glob to support members that look like "lib/*"
+            let path = format!("./{}/{}/Cargo.toml", sub_directory, member);
+            for sub_cargo_path in glob(&path).expect("failed to glob pattern") {
+                let sub_cargo_path = match sub_cargo_path {
+                    Ok(path) => path,
+                    Err(e) => {
+                        return Err(anyhow!(e));
+                    }
+                };
 
-            update_required |= compare_cargo_toml_revisions(
-                &format!("./{}/{}", sub_directory, member),
-                &sub_cargo_manifest,
-                package,
-                ensure_rev,
-            )?;
+                let sub_cargo_manifest = Manifest::from_path(&sub_cargo_path)?;
 
-            for dep in sub_cargo_manifest.dependencies.values() {
-                if let Some(detail) = dep.detail() {
-                    // TODO currently does not check for crates.io, just git
-                    if let Some(git) = &detail.git {
-                        if git.contains(package) {
-                            if let Some(rev) = &detail.rev {
-                                if rev != ensure_rev {
-                                    println!(
-                                        "update {} {} rev from {} to {}",
-                                        sub_cargo_path, package, rev, ensure_rev,
-                                    );
-                                    update_required = true;
+                update_required |= compare_cargo_toml_revisions(
+                    &format!("./{}/{}", sub_directory, member),
+                    &sub_cargo_manifest,
+                    package,
+                    ensure_rev,
+                )?;
+
+                for (dep_key, dep) in sub_cargo_manifest.dependencies {
+                    if let Some(detail) = dep.detail() {
+                        // TODO currently does not check for crates.io, just git
+                        if let Some(git) = &detail.git {
+                            if git.ends_with(package) {
+                                if let Some(rev) = &detail.rev {
+                                    if rev != ensure_rev {
+                                        println!(
+                                            "update {:?} {:?} rev from {} to {}",
+                                            sub_cargo_path, dep_key, rev, ensure_rev,
+                                        );
+                                        update_required = true;
+                                    }
                                 }
                             }
                         }
