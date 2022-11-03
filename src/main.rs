@@ -40,7 +40,8 @@ use cargo_toml::Manifest;
 use glob::glob;
 use reqwest::blocking::Client;
 
-use omicron_package::{Config, ExternalPackageSource};
+use omicron_zone_package::config::*;
+use omicron_zone_package::package::*;
 
 /// Recursively search each Cargo.toml to see if a package's revision needs
 /// updating. Print out an instruction if it does, and return if an update is
@@ -167,15 +168,16 @@ fn main() -> Result<()> {
     let package_manifest: Config =
         toml::from_str(&std::fs::read_to_string("./omicron/package-manifest.toml")?)?;
 
-    for (name, package) in &package_manifest.external_packages {
-        if let ExternalPackageSource::Prebuilt {
+    for (name, package) in &package_manifest.packages {
+        if let PackageSource::Prebuilt {
             repo,
             commit,
             sha256,
         } = &package.source
         {
             if !latest_revs.contains_key(&repo.clone()) {
-                panic!("no latest rev for {}", repo);
+                println!("no latest rev for {}", repo);
+                continue;
             }
 
             // skip checking maghemite for now
@@ -213,7 +215,7 @@ fn main() -> Result<()> {
             }
 
             let response_hash = response.text()?;
-            if response_hash.trim() != *sha256 {
+            if response_hash.trim() != sha256 {
                 println!(
                     "update omicron package manifest {} sha256 from {} to {}",
                     name,
