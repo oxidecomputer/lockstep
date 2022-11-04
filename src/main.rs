@@ -105,7 +105,7 @@ fn main() -> Result<()> {
     let mut update_required = false;
 
     // Check we're in a location that contains checkouts of relevant repos
-    for repo in &["crucible", "propolis", "omicron", "maghemite"] {
+    for repo in &["crucible", "propolis", "omicron", "maghemite", "dendrite"] {
         if !Path::new(&repo).exists() {
             bail!("cannot find your local checkout of {}!", repo);
         }
