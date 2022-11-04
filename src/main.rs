@@ -130,6 +130,11 @@ fn main() -> Result<()> {
 
     latest_revs.insert("maghemite".to_string(), maghemite_rev.to_string());
 
+    let dendrite_repo = git2::Repository::open("dendrite")?;
+    let dendrite_rev: git2::Oid = dendrite_repo.head()?.target().unwrap();
+
+    latest_revs.insert("dendrite".to_string(), dendrite_rev.to_string());
+
     // Ensure propolis uses this crucible revision
     update_required |= compare_cargo_toml_revisions(
         "propolis",
