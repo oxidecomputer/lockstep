@@ -54,6 +54,47 @@ fn compare_cargo_toml_revisions(
 ) -> Result<bool> {
     let mut update_required = false;
 
+    let cargo_path = format!("./{}/Cargo.toml", sub_directory);
+    for (dep_key, dep) in &cargo_manifest.dependencies {
+        if let Some(detail) = dep.detail() {
+            // TODO currently does not check for crates.io, just git
+            if let Some(git) = &detail.git {
+                if git.ends_with(package) {
+                    if let Some(rev) = &detail.rev {
+                        if rev != ensure_rev {
+                            println!(
+                                "update {:?} {:?} rev from {} to {}",
+                                cargo_path, dep_key, rev, ensure_rev,
+                            );
+                            update_required = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(workspace) = &cargo_manifest.workspace {
+        for (dep_key, dep) in &workspace.dependencies {
+            if let Some(detail) = dep.detail() {
+                // TODO currently does not check for crates.io, just git
+                if let Some(git) = &detail.git {
+                    if git.ends_with(package) {
+                        if let Some(rev) = &detail.rev {
+                            if rev != ensure_rev {
+                                println!(
+                                    "update {:?} {:?} rev from {} to {}",
+                                    cargo_path, dep_key, rev, ensure_rev,
+                                );
+                                update_required = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if let Some(workspace) = &cargo_manifest.workspace {
         for member in &workspace.members {
             // use glob to support members that look like "lib/*"
@@ -69,30 +110,12 @@ fn compare_cargo_toml_revisions(
                 let sub_cargo_manifest = Manifest::from_path(&sub_cargo_path)?;
 
                 update_required |= compare_cargo_toml_revisions(
-                    &format!("./{}/{}", sub_directory, member),
+                    // get directory name for resolved Cargo.toml path
+                    &sub_cargo_path.parent().unwrap().to_str().unwrap(),
                     &sub_cargo_manifest,
                     package,
                     ensure_rev,
                 )?;
-
-                for (dep_key, dep) in sub_cargo_manifest.dependencies {
-                    if let Some(detail) = dep.detail() {
-                        // TODO currently does not check for crates.io, just git
-                        if let Some(git) = &detail.git {
-                            if git.ends_with(package) {
-                                if let Some(rev) = &detail.rev {
-                                    if rev != ensure_rev {
-                                        println!(
-                                            "update {:?} {:?} rev from {} to {}",
-                                            sub_cargo_path, dep_key, rev, ensure_rev,
-                                        );
-                                        update_required = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
     }
