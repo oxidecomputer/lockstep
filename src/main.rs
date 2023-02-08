@@ -105,7 +105,13 @@ fn compare_cargo_toml_revisions(
                     }
                 };
 
-                let sub_cargo_manifest = Manifest::from_path(&sub_cargo_path)?;
+                let sub_cargo_manifest = match Manifest::from_path(&sub_cargo_path) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("error with {:?}: {}", &sub_cargo_path, e);
+                        continue;
+                    }
+                };
 
                 update_required |= compare_cargo_toml_revisions(
                     // get directory name for resolved Cargo.toml path
