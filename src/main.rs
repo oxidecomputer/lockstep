@@ -93,9 +93,7 @@ fn compare_cargo_toml_revisions(
                 }
             }
         }
-    }
 
-    if let Some(workspace) = &cargo_manifest.workspace {
         for member in &workspace.members {
             // use glob to support members that look like "lib/*"
             let path = format!("./{}/{}/Cargo.toml", sub_directory, member);
