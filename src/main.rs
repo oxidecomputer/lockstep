@@ -231,7 +231,7 @@ fn main() -> Result<()> {
                     "wait for {} image for {} to be built (reqwest returned {})",
                     name, propolis_rev, e,
                 );
-                return Ok(());
+                continue;
             }
 
             let response = response.unwrap();
@@ -243,7 +243,7 @@ fn main() -> Result<()> {
                     propolis_rev,
                     response.status(),
                 );
-                return Ok(());
+                continue;
             }
 
             let response_hash = response.text()?;
