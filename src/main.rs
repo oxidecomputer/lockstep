@@ -25,6 +25,8 @@ update omicron package manifest crucible rev from 257032d1e842901d427f344a396d78
 wait for propolis-server image for 47ef18a5b0eb7a208ae43e669cf0a93d65576114 to be built (reqwest returned 500 Internal Server Error)
 ```
 
+lockstep will also look into Cargo.lock to check for outdated revisions there.
+
 if nothing is required, lockstep won't print anything.
 
 # TODO
@@ -115,7 +117,7 @@ fn compare_cargo_toml_revisions(
 
                 update_required |= compare_cargo_toml_revisions(
                     // get directory name for resolved Cargo.toml path
-                    &sub_cargo_path.parent().unwrap().to_str().unwrap(),
+                    sub_cargo_path.parent().unwrap().to_str().unwrap(),
                     &sub_cargo_manifest,
                     package,
                     ensure_rev,
@@ -125,6 +127,44 @@ fn compare_cargo_toml_revisions(
     }
 
     Ok(update_required)
+}
+
+fn check_cargo_lock_revisions(
+    sub_directory: &str,
+    latest_revs: &BTreeMap<String, String>,
+) -> Result<()> {
+    use cargo_lock::package;
+    use cargo_lock::Lockfile;
+
+    let cargo_lockfile = Lockfile::load(format!("{}/Cargo.lock", sub_directory))?;
+
+    for package in &cargo_lockfile.packages {
+        if let Some(source) = &package.source {
+            let path = source.url().path();
+            if let Some(repo) = path.strip_prefix("/oxidecomputer/") {
+                if let package::SourceKind::Git(reference) = source.kind() {
+                    if matches!(reference, package::GitReference::Branch(..)) {
+                        if let Some(precise) = source.precise() {
+                            // println!("checking {}/Cargo.lock {} {}", sub_directory, repo, precise);
+
+                            if let Some(latest_rev) = latest_revs.get(repo) {
+                                if latest_rev != precise {
+                                    println!(
+                                        "{}/Cargo.lock has old rev for {}!",
+                                        sub_directory, repo
+                                    );
+                                }
+                            } else {
+                                // println!("no latest rev for {}", repo);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -162,6 +202,14 @@ fn main() -> Result<()> {
 
     latest_revs.insert("dendrite".to_string(), dendrite_rev.to_string());
 
+    let omicron_repo = git2::Repository::open("omicron")?;
+    let omicron_rev: git2::Oid = omicron_repo.head()?.target().unwrap();
+
+    latest_revs.insert("omicron".to_string(), omicron_rev.to_string());
+
+    // Check the revs in crucible's Cargo.lock
+    check_cargo_lock_revisions("crucible", &latest_revs)?;
+
     // Ensure propolis uses this crucible revision
     update_required |= compare_cargo_toml_revisions(
         "propolis",
@@ -173,6 +221,9 @@ fn main() -> Result<()> {
     if update_required {
         return Ok(());
     }
+
+    // Check the revs in propolis' Cargo.lock
+    check_cargo_lock_revisions("propolis", &latest_revs)?;
 
     // Check if omicron needs to:
     // - update crucible cargo revs

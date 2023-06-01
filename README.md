@@ -25,6 +25,8 @@ update omicron package manifest crucible rev from 257032d1e842901d427f344a396d78
 wait for propolis-server image for 47ef18a5b0eb7a208ae43e669cf0a93d65576114 to be built (reqwest returned 500 Internal Server Error)
 ```
 
+lockstep will also look into Cargo.lock to check for outdated revisions there.
+
 if nothing is required, lockstep won't print anything.
 
 ## TODO
