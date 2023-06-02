@@ -35,6 +35,7 @@ opte support is missing
 */
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::path::Path;
 
 use anyhow::{anyhow, bail, Result};
@@ -129,6 +130,51 @@ fn compare_cargo_toml_revisions(
     Ok(update_required)
 }
 
+/// Return all the dependencies named all Cargo.toml files
+fn get_explicit_dependencies(
+    sub_directory: &str,
+    dependencies: &mut HashSet<String>,
+) -> Result<()> {
+    let cargo_path = format!("./{}/Cargo.toml", sub_directory);
+    let cargo_manifest = match Manifest::from_path(&cargo_path) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error with {:?}: {}", &cargo_path, e);
+            return Ok(());
+        }
+    };
+
+    for dep_key in cargo_manifest.dependencies.keys() {
+        dependencies.insert(dep_key.clone());
+    }
+
+    if let Some(workspace) = &cargo_manifest.workspace {
+        for dep_key in workspace.dependencies.keys() {
+            dependencies.insert(dep_key.clone());
+        }
+
+        for member in &workspace.members {
+            // use glob to support members that look like "lib/*"
+            let path = format!("./{}/{}/Cargo.toml", sub_directory, member);
+            for sub_cargo_path in glob(&path).expect("failed to glob pattern") {
+                let sub_cargo_path = match sub_cargo_path {
+                    Ok(path) => path,
+                    Err(e) => {
+                        return Err(anyhow!(e));
+                    }
+                };
+
+                get_explicit_dependencies(
+                    sub_cargo_path.parent().unwrap().to_str().unwrap(),
+                    dependencies,
+                )?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn check_cargo_lock_revisions(
     sub_directory: &str,
     latest_revs: &BTreeMap<String, String>,
@@ -137,6 +183,11 @@ fn check_cargo_lock_revisions(
     use cargo_lock::Lockfile;
 
     let cargo_lockfile = Lockfile::load(format!("{}/Cargo.lock", sub_directory))?;
+    let dependencies = {
+        let mut dependencies = HashSet::new();
+        get_explicit_dependencies(sub_directory, &mut dependencies)?;
+        dependencies
+    };
 
     for package in &cargo_lockfile.packages {
         if let Some(source) = &package.source {
@@ -149,10 +200,14 @@ fn check_cargo_lock_revisions(
 
                             if let Some(latest_rev) = latest_revs.get(repo) {
                                 if latest_rev != precise {
-                                    println!(
-                                        "{}/Cargo.lock has old rev for {}!",
-                                        sub_directory, repo
-                                    );
+                                    // only suggest running `cargo update -p`
+                                    // for packages in a Cargo.toml
+                                    if dependencies.contains(&package.name.to_string()) {
+                                        println!(
+                                            "{}/Cargo.lock has old rev for {} {}!",
+                                            sub_directory, repo, package.name,
+                                        );
+                                    }
                                 }
                             } else {
                                 // println!("no latest rev for {}", repo);
