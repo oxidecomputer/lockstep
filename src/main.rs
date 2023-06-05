@@ -286,10 +286,6 @@ fn check_cargo_lock_revisions(
         }
     }
 
-    for source in sources {
-        println!("{}/Cargo.lock has source {:?}", sub_directory, source);
-    }
-
     Ok(())
 }
 
