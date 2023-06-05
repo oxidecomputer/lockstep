@@ -618,6 +618,7 @@ dependencies = [
  "omicron-zone-package",
  "reqwest",
  "toml 0.5.9",
+ "url",
 ]
 
 [[package]]

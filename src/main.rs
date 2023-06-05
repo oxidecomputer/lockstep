@@ -34,11 +34,16 @@ if nothing is required, lockstep won't print anything.
 opte support is missing
 */
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::hash;
+use std::hash::Hash;
 use std::path::Path;
+use url::Url;
 
 use anyhow::{anyhow, bail, Result};
+use cargo_lock::package::SourceKind;
 use cargo_toml::Manifest;
 use glob::glob;
 use reqwest::blocking::Client;
@@ -175,6 +180,46 @@ fn get_explicit_dependencies(
     Ok(())
 }
 
+// Implement SourceID like rust-lang/Cargo, not like in rustsec/rustsec (read:
+// with manual impls)
+#[derive(Clone, Debug, Eq)]
+struct MySourceId {
+    pub url: Url,
+    pub kind: SourceKind,
+    pub precise: Option<String>,
+}
+
+impl PartialEq for MySourceId {
+    fn eq(&self, other: &MySourceId) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl PartialOrd for MySourceId {
+    fn partial_cmp(&self, other: &MySourceId) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for MySourceId {
+    fn cmp(&self, other: &MySourceId) -> Ordering {
+        // Ignore precise and name
+        match self.kind.cmp(&other.kind) {
+            Ordering::Equal => {}
+            other => return other,
+        };
+
+        self.url.cmp(&other.url)
+    }
+}
+
+impl Hash for MySourceId {
+    fn hash<S: hash::Hasher>(&self, into: &mut S) {
+        self.url.hash(into);
+        self.kind.hash(into);
+    }
+}
+
 fn check_cargo_lock_revisions(
     sub_directory: &str,
     latest_revs: &BTreeMap<String, String>,
@@ -188,6 +233,9 @@ fn check_cargo_lock_revisions(
         get_explicit_dependencies(sub_directory, &mut dependencies)?;
         dependencies
     };
+
+    // Check for conflicting SourceId
+    let mut sources: HashSet<MySourceId> = HashSet::new();
 
     for package in &cargo_lockfile.packages {
         if let Some(source) = &package.source {
@@ -204,8 +252,8 @@ fn check_cargo_lock_revisions(
                                     // for packages in a Cargo.toml
                                     if dependencies.contains(&package.name.to_string()) {
                                         println!(
-                                            "{}/Cargo.lock has old rev for {} {}!",
-                                            sub_directory, repo, package.name,
+                                            "{}/Cargo.lock has old rev for {} {}! update {} to {}",
+                                            sub_directory, repo, package.name, precise, latest_rev,
                                         );
                                     }
                                 }
@@ -216,7 +264,30 @@ fn check_cargo_lock_revisions(
                     }
                 }
             }
+
+            let my_source_id = MySourceId {
+                url: source.url().clone(),
+                kind: source.kind().clone(),
+                precise: source.precise().map(|x| x.to_string()).clone(),
+            };
+
+            if let Some(existing_source) = sources.get(&my_source_id) {
+                if existing_source.precise == my_source_id.precise {
+                    sources.insert(my_source_id);
+                } else {
+                    panic!(
+                        "{}/Cargo.lock has a mismatch for {:?} != {:?}!",
+                        sub_directory, existing_source, my_source_id,
+                    );
+                }
+            } else {
+                sources.insert(my_source_id);
+            }
         }
+    }
+
+    for source in sources {
+        println!("{}/Cargo.lock has source {:?}", sub_directory, source);
     }
 
     Ok(())
@@ -283,6 +354,8 @@ fn main() -> Result<()> {
     // Check if omicron needs to:
     // - update crucible cargo revs
     // - update propolis cargo revs
+
+    check_cargo_lock_revisions("omicron", &latest_revs)?;
 
     update_required |= compare_cargo_toml_revisions(
         "omicron",
