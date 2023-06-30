@@ -42,7 +42,7 @@ use std::hash::Hash;
 use std::path::Path;
 use url::Url;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use cargo_lock::package::SourceKind;
 use cargo_toml::Manifest;
 use glob::glob;
@@ -56,34 +56,16 @@ use omicron_zone_package::package::*;
 /// required.
 fn compare_cargo_toml_revisions(
     sub_directory: &str,
-    cargo_manifest: &Manifest,
-    package: &str,
-    ensure_rev: &str,
+    latest_revs: &BTreeMap<String, String>,
 ) -> Result<bool> {
     let mut update_required = false;
 
-    let cargo_path = format!("./{}/Cargo.toml", sub_directory);
-    for (dep_key, dep) in &cargo_manifest.dependencies {
-        if let Some(detail) = dep.detail() {
-            // TODO currently does not check for crates.io, just git
-            if let Some(git) = &detail.git {
-                if git.ends_with(package) {
-                    if let Some(rev) = &detail.rev {
-                        if rev != ensure_rev {
-                            println!(
-                                "update {:?} {:?} rev from {} to {}",
-                                cargo_path, dep_key, rev, ensure_rev,
-                            );
-                            update_required = true;
-                        }
-                    }
-                }
-            }
-        }
-    }
+    let cargo_manifest_path = format!("./{}/Cargo.toml", sub_directory);
+    let cargo_manifest = Manifest::from_path(&cargo_manifest_path)
+        .context(format!("path: {:?}", cargo_manifest_path))?;
 
-    if let Some(workspace) = &cargo_manifest.workspace {
-        for (dep_key, dep) in &workspace.dependencies {
+    for (package, ensure_rev) in latest_revs {
+        for (dep_key, dep) in &cargo_manifest.dependencies {
             if let Some(detail) = dep.detail() {
                 // TODO currently does not check for crates.io, just git
                 if let Some(git) = &detail.git {
@@ -92,7 +74,7 @@ fn compare_cargo_toml_revisions(
                             if rev != ensure_rev {
                                 println!(
                                     "update {:?} {:?} rev from {} to {}",
-                                    cargo_path, dep_key, rev, ensure_rev,
+                                    cargo_manifest_path, dep_key, rev, ensure_rev,
                                 );
                                 update_required = true;
                             }
@@ -102,32 +84,52 @@ fn compare_cargo_toml_revisions(
             }
         }
 
-        for member in &workspace.members {
-            // use glob to support members that look like "lib/*"
-            let path = format!("./{}/{}/Cargo.toml", sub_directory, member);
-            for sub_cargo_path in glob(&path).expect("failed to glob pattern") {
-                let sub_cargo_path = match sub_cargo_path {
-                    Ok(path) => path,
-                    Err(e) => {
-                        return Err(anyhow!(e));
+        if let Some(workspace) = &cargo_manifest.workspace {
+            for (dep_key, dep) in &workspace.dependencies {
+                if let Some(detail) = dep.detail() {
+                    // TODO currently does not check for crates.io, just git
+                    if let Some(git) = &detail.git {
+                        if git.ends_with(package) {
+                            if let Some(rev) = &detail.rev {
+                                if rev != ensure_rev {
+                                    println!(
+                                        "update {:?} {:?} rev from {} to {}",
+                                        cargo_manifest_path, dep_key, rev, ensure_rev,
+                                    );
+                                    update_required = true;
+                                }
+                            }
+                        }
                     }
-                };
+                }
+            }
 
-                let sub_cargo_manifest = match Manifest::from_path(&sub_cargo_path) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        eprintln!("error with {:?}: {}", &sub_cargo_path, e);
-                        continue;
+            for member in &workspace.members {
+                // use glob to support members that look like "lib/*"
+                let path = format!("./{}/{}/Cargo.toml", sub_directory, member);
+                for sub_cargo_path in glob(&path).expect("failed to glob pattern") {
+                    let sub_cargo_path = match sub_cargo_path {
+                        Ok(path) => path,
+                        Err(e) => {
+                            return Err(anyhow!(e));
+                        }
+                    };
+
+                    match compare_cargo_toml_revisions(
+                        // get directory name for resolved Cargo.toml path
+                        sub_cargo_path.parent().unwrap().to_str().unwrap(),
+                        latest_revs,
+                    ) {
+                        Ok(retval) => {
+                            update_required |= retval;
+                        }
+
+                        Err(e) => {
+                            eprintln!("error with {:?}: {}", &sub_cargo_path, e);
+                            continue;
+                        }
                     }
-                };
-
-                update_required |= compare_cargo_toml_revisions(
-                    // get directory name for resolved Cargo.toml path
-                    sub_cargo_path.parent().unwrap().to_str().unwrap(),
-                    &sub_cargo_manifest,
-                    package,
-                    ensure_rev,
-                )?;
+                }
             }
         }
     }
@@ -301,44 +303,43 @@ fn main() -> Result<()> {
     }
 
     // The latest revisions of repos
-    let mut latest_revs: BTreeMap<String, String> = BTreeMap::default();
+    let latest_revs = {
+        let mut latest_revs: BTreeMap<String, String> = BTreeMap::default();
 
-    // Get the crucible and propolis revisions in the checked out directories
-    let crucible_repo = git2::Repository::open("crucible")?;
-    let crucible_rev: git2::Oid = crucible_repo.head()?.target().unwrap();
+        // Get the crucible and propolis revisions in the checked out directories
+        let crucible_repo = git2::Repository::open("crucible")?;
+        let crucible_rev: git2::Oid = crucible_repo.head()?.target().unwrap();
 
-    latest_revs.insert("crucible".to_string(), crucible_rev.to_string());
+        latest_revs.insert("crucible".to_string(), crucible_rev.to_string());
 
-    let propolis_repo = git2::Repository::open("propolis")?;
-    let propolis_rev: git2::Oid = propolis_repo.head()?.target().unwrap();
+        let propolis_repo = git2::Repository::open("propolis")?;
+        let propolis_rev: git2::Oid = propolis_repo.head()?.target().unwrap();
 
-    latest_revs.insert("propolis".to_string(), propolis_rev.to_string());
+        latest_revs.insert("propolis".to_string(), propolis_rev.to_string());
 
-    let maghemite_repo = git2::Repository::open("maghemite")?;
-    let maghemite_rev: git2::Oid = maghemite_repo.head()?.target().unwrap();
+        let maghemite_repo = git2::Repository::open("maghemite")?;
+        let maghemite_rev: git2::Oid = maghemite_repo.head()?.target().unwrap();
 
-    latest_revs.insert("maghemite".to_string(), maghemite_rev.to_string());
+        latest_revs.insert("maghemite".to_string(), maghemite_rev.to_string());
 
-    let dendrite_repo = git2::Repository::open("dendrite")?;
-    let dendrite_rev: git2::Oid = dendrite_repo.head()?.target().unwrap();
+        let dendrite_repo = git2::Repository::open("dendrite")?;
+        let dendrite_rev: git2::Oid = dendrite_repo.head()?.target().unwrap();
 
-    latest_revs.insert("dendrite".to_string(), dendrite_rev.to_string());
+        latest_revs.insert("dendrite".to_string(), dendrite_rev.to_string());
 
-    let omicron_repo = git2::Repository::open("omicron")?;
-    let omicron_rev: git2::Oid = omicron_repo.head()?.target().unwrap();
+        let omicron_repo = git2::Repository::open("omicron")?;
+        let omicron_rev: git2::Oid = omicron_repo.head()?.target().unwrap();
 
-    latest_revs.insert("omicron".to_string(), omicron_rev.to_string());
+        latest_revs.insert("omicron".to_string(), omicron_rev.to_string());
+
+        latest_revs
+    };
 
     // Check the revs in crucible's Cargo.lock
     check_cargo_lock_revisions("crucible", &latest_revs)?;
 
     // Ensure propolis uses this crucible revision
-    update_required |= compare_cargo_toml_revisions(
-        "propolis",
-        &Manifest::from_path("./propolis/Cargo.toml")?,
-        "crucible",
-        &crucible_rev.to_string(),
-    )?;
+    update_required |= compare_cargo_toml_revisions("propolis", &latest_revs)?;
 
     if update_required {
         return Ok(());
@@ -353,19 +354,7 @@ fn main() -> Result<()> {
 
     check_cargo_lock_revisions("omicron", &latest_revs)?;
 
-    update_required |= compare_cargo_toml_revisions(
-        "omicron",
-        &Manifest::from_path("./omicron/Cargo.toml")?,
-        "crucible",
-        &crucible_rev.to_string(),
-    )?;
-
-    update_required |= compare_cargo_toml_revisions(
-        "omicron",
-        &Manifest::from_path("./omicron/Cargo.toml")?,
-        "propolis",
-        &propolis_rev.to_string(),
-    )?;
+    update_required |= compare_cargo_toml_revisions("omicron", &latest_revs)?;
 
     if update_required {
         return Ok(());
@@ -404,7 +393,9 @@ fn main() -> Result<()> {
             if let Err(e) = response {
                 println!(
                     "wait for {} image for {} to be built (reqwest returned {})",
-                    name, propolis_rev, e,
+                    name,
+                    latest_revs[&repo.clone()],
+                    e,
                 );
                 continue;
             }
@@ -415,7 +406,7 @@ fn main() -> Result<()> {
                 println!(
                     "wait for {} image for {} to be built (reqwest returned {})",
                     name,
-                    propolis_rev,
+                    latest_revs[&repo.clone()],
                     response.status(),
                 );
                 continue;
