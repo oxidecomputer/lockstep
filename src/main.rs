@@ -30,8 +30,6 @@ lockstep will also look into Cargo.lock to check for outdated revisions there.
 if nothing is required, lockstep won't print anything.
 
 # TODO
-
-opte support is missing
 */
 
 use std::cmp::Ordering;
@@ -332,13 +330,18 @@ fn main() -> Result<()> {
 
         latest_revs.insert("omicron".to_string(), omicron_rev.to_string());
 
+        let opte_repo = git2::Repository::open("opte")?;
+        let opte_rev: git2::Oid = opte_repo.head()?.target().unwrap();
+
+        latest_revs.insert("opte".to_string(), opte_rev.to_string());
+
         latest_revs
     };
 
     // Check the revs in crucible's Cargo.lock
     check_cargo_lock_revisions("crucible", &latest_revs)?;
 
-    // Ensure propolis uses this crucible revision
+    // Ensure propolis first
     update_required |= compare_cargo_toml_revisions("propolis", &latest_revs)?;
 
     if update_required {
@@ -348,9 +351,7 @@ fn main() -> Result<()> {
     // Check the revs in propolis' Cargo.lock
     check_cargo_lock_revisions("propolis", &latest_revs)?;
 
-    // Check if omicron needs to:
-    // - update crucible cargo revs
-    // - update propolis cargo revs
+    // Check if omicron needs to update revs
 
     check_cargo_lock_revisions("omicron", &latest_revs)?;
 

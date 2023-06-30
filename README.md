@@ -30,5 +30,3 @@ lockstep will also look into Cargo.lock to check for outdated revisions there.
 if nothing is required, lockstep won't print anything.
 
 ## TODO
-
-opte support is missing
