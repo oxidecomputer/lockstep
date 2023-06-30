@@ -1,7 +1,7 @@
 
 .PHONY: all clippy fmt test build banner tags clean fix readme
 
-all: clippy
+all: clippy readme
 
 clippy: fmt
 	cargo clippy
